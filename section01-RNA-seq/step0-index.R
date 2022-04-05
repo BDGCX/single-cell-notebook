@@ -71,13 +71,15 @@ if(T){
   #x <- a[1,]
   #x>1   判断x是否大于1，输出逻辑值
   #table(x>1)  对x>1的结果进行统计
-  FALSE  TRUE 
-  766     2
+  
+  #FALSE  TRUE 
+  #766     2
   #sum(x>1)
-  TRUE 
-   2
+  
+   #TRUE 
+   #2
   #sum(x>1)>floor(ncol(a)/50)
-  [1] FALSE
+  #[1] FALSE
   #x <- a[2,]
   #x>1
   #table(x>1)
