@@ -172,6 +172,7 @@ if(T){
  
   dat[1:4,1:4]   
   #层次聚类
+  hc=hclust(dist(t(dat)))#视频代码
   hc=hclust(dist(t(log(dat+0.1)))) ##样本间层次聚类
   # 如果是基因聚类，可以选择 wgcna 等算法 
   ## statquest 
