@@ -30,7 +30,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
 
 library(BiocManager)
 
-if(F){
+if(T){
   
   
   BiocManager::install(c( 'scran'),ask = F,update = F)
@@ -47,16 +47,15 @@ if(F){
 }
  
 ##  里面代码注释较好，请务必花 4个小时以上时间理解。
-if(T){
-  a=read.table('../GSE111229_Mammary_Tumor_fibroblasts_768samples_rawCounts.txt.gz',
+if(T){  
+  a=read.table('../section01-RNA-seq/raw_data/GSE111229_Mammary_Tumor_fibroblasts_768samples_rawCounts.txt.gz',
                header = T ,sep = '\t')  ##把表达矩阵文件载入R，header=T :保留文件头部信息，seq='\t'以tap为分隔符
   # 每次都要检测数据
-  a[1:6,1:4] #对于a矩阵取第1~6行，第1~4列
+  a[1:6,1:4] #对于a矩阵取第1~6行，第1~4列,列是细胞，行是基因
   ## 读取RNA-seq的 counts 定量结果，表达矩阵需要进行简单的过滤
-  dat=a[apply(a,1, function(x) sum(x>1) > floor(ncol(a)/50)),] 
+  dat=a[apply(a,1, function(x) {sum(x>1)} > floor(ncol(a)/50)),] 
   #筛选表达量合格的行(基因), 列（细胞）数不变
-  
-  ##ncol()返回矩阵的列数值；floor()四舍五入取整数；
+  ##ncol()返回矩阵的列数值；floor()四舍五入向下取整数；
   ##function() 定义一个函数；sum()求和
   #上面的apply()指令代表对矩阵a进行行计算，判断每行表达量>1的样本总个数，并筛选出细胞表达量合格的基因（行）
   #第一个参数是指要参与计算的矩阵——a
@@ -64,20 +63,18 @@ if(T){
   #第三个参数是指具体的运算参数,定义一个函数x（即表达量为x）
   
   #对每行中x>1的列（即样本数）求和，即得出的是每行中表达量大于1的样本数，
-  #然后再筛选出大于floor(ncol(a)/50)的行，这样的行（基因）的细胞表达量才算合格
+  #然后再筛选出大于floor(ncol(a)/50)，即至少有2%的细胞样本表达该基因，这样的行（基因）的细胞表达量才算合格
   #因为2%的细胞有表达量，所以对于768个细胞样本，每个行(基因)在细胞中的表达至少要有15.36（约等于15）个样本表达才算合格
   ## 2 % 的细胞有表达量
-  ##上述表达式思考过程
+  
+  #上述表达式思考过程
   #x <- a[1,]
   #x>1   判断x是否大于1，输出逻辑值
   #table(x>1)  对x>1的结果进行统计
-  
   #FALSE  TRUE 
   #766     2
   #sum(x>1)
-  
-   #TRUE 
-   #2
+  ##2
   #sum(x>1)>floor(ncol(a)/50)
   #[1] FALSE
   #x <- a[2,]
@@ -87,12 +84,15 @@ if(T){
   #因为要对每一行进行判断，所以引入循环
   #apply(a,1, function(x) {sum(x>1)}>floor(ncol(a)/50))
   
+  row.names(dat)
+  grep("ERCC",row.names(dat))#查看spike-ins,也就是ERCC基因，外部加入的内参RNA
+  table(table(grep("ERCC",row.names(dat))))#有60个ERCC基因
   dat[1:4,1:4]
-  sum(dat[,3])
+  #sum(dat[,3])
   #  0610007P14Rik in  SS2_15_0048_A5 
-  log2(18*1000000/sum(dat[,3])+1)
+  #log2(18*1000000/sum(dat[,3])+1)
   ## 18 -- > 6.459884  ## SS2_15_0048_A5
-  dat=log2(edgeR::cpm(dat)+1) 
+  dat=log2(edgeR::cpm(dat)+1) #等同于上2行代码计算
   ##归一化的一种选择，这里是CPM(count-per-million，每百万碱基中每个转录本的count值)
   ###CPM只对read count相对总reads数做了数量的均一化，去除文库大小差异。
  
@@ -108,8 +108,8 @@ if(T){
   dist(t(tmp))
   cor(tmp)
   dist(t(scale(tmp)))
-  # 可以看到dist函数计算样本直接距离和cor函数计算样本直接相关性，是完全不同的概念。虽然我都没有调它们两个函数的默认的参数。
-  # 
+  # 可以看到dist函数计算样本直接距离和cor函数计算样本直接相关性，是完全不同的概念。
+  #虽然我都没有调它们两个函数的默认的参数。
   # 总结：
   # 
   # - dist函数计算行与行（样本）之间的距离
@@ -122,11 +122,12 @@ if(T){
   #层次聚类，因为近 800细胞，非常耗时。
   hc=hclust(dist(t(dat))) ##样本间层次聚类
   # 原始表达矩阵转置后，细胞在行，所以计算的是细胞与细胞之间的距离。
+  #以每个基因的表达量作为一个维度，来计算细胞之间的距离，基因表达量相近的细胞空间距离也会比较接近
   ## statquest 有详细讲解背后的统计学原理。
   class(hc)
   ?plot.hclust
   ## 查看说明书。
-  plot(hc,labels = FALSE)
+  plot(hc,labels = FALSE)#细胞大致分4类
   
   #t:矩阵转置，行转列，列转行
   #分类时常常需要估算不同样本之间的相似性(Similarity Measurement)
@@ -151,16 +152,17 @@ if(T){
   n_g = apply(a,2,function(x) sum(x>1)) #统计每个样本有表达的有多少行（基因）
   # 这里我们定义， reads数量大于1的那些基因为有表达，一般来说单细胞转录组过半数的基因是不会表达的。
   # 而且大部分单细胞转录组技术很烂，通常超过75%的基因都没办法检测到。
-
+  hist(n_g,breaks = 30)
+  
   df=data.frame(g=group_list,plate=plate,n_g=n_g) #新建数据框(细胞的属性信息)
   
   ##(样本为行名，列分别为：样本分类信息，样本分组，样本表达的基因数【注意：不是表达量的和，而是种类数或者说个数】)
   
-  df$all='all' #添加列，列名为"all"，没事意思，就是后面有需要
+  df$all='all' #添加列，列名为"all"，没啥意思，就是后面有需要
   metadata=df
-  save(a,dat,df,file = '../input.Rdata') #保存a,dat,df这变量到上级目录的input.Rdata
+  save(a,dat,metadata,file = '../input.Rdata') #保存a,dat,df这变量到上级目录的input.Rdata
   # 因为另外一个项目也需要使用这个数据集，所以保存到了上级目录。
-} 
+ }
 
 if(T){
   a=read.table('../GSE111229_Mammary_Tumor_fibroblasts_768samples_rpkmNormalized.txt.gz',
@@ -200,7 +202,8 @@ if(T){
   metadata=df
   save(dat,metadata,file = '../input_rpkm.Rdata') #保存a,dat,df这变量到上级目录的input.Rdata
   # 因为另外一个项目也需要使用这个数据集，所以保存到了上级目录。
-} 
+  save(a,file = "../a_rpkm.Rdata")
+  } 
 
 
 load(file = '../input.Rdata') ##从上级目录载入input.Rdata

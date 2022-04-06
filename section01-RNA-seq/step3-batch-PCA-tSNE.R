@@ -27,7 +27,8 @@ table(plate)
 ## 最流行的细胞群体是否有明显的差别，肯定是hclust分群，热图展现，PCA,tSNE 等等
 
 ## 如果想了解PCA分析原理，需要阅读：https://mp.weixin.qq.com/s/Kw05PWD2m65TZu2Blhnl4w
-## 首先我们使用简单的 prcomp 函数来了解 PCA分析
+##首先我们使用简单的 prcomp 函数来了解 PCA分析
+#以下直接跳过到131行
 if(F){
   set.seed(123456789)
   #set.seed()产生随机数
@@ -127,6 +128,7 @@ if(F){
 ## 下面是画PCA的必须操作，需要看不同做PCA的包的说明书。
 dat_back=dat
 
+#以上是讲解过程直接跳过
 dat=dat_back
 dat=t(dat)
 dat=as.data.frame(dat)
@@ -144,7 +146,7 @@ table(dat$plate)
 # names(colors) = unique(dat$plate)
 # text(pca_dat$rotation[ , 1:2], labels=dat$plate,col=colors[dat$plate])
 # 
-
+#以上是讲解过程直接跳过
 rm(list = ls())  ## 魔幻操作，一键清空~
 options(stringsAsFactors = F)
 load(file = '../input_rpkm.Rdata')

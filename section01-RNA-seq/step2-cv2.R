@@ -28,7 +28,7 @@ rm(list = ls())  ## 魔幻操作，一键清空~
 options(stringsAsFactors = F)
 load(file = '../input_rpkm.Rdata')
 #a[1:4,1:4]
-head(df)
+head(metadata)
 ## 载入第0步准备好的表达矩阵，及细胞的一些属性（hclust分群，plate批次，检测到的基因数量）
 #注意 变量a是原始的counts矩阵，变量 dat是log2CPM后的表达量矩阵。
 

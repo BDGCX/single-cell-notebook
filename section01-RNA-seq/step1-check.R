@@ -13,7 +13,7 @@
 
 rm(list = ls())  ## 魔幻操作，一键清空~
 options(stringsAsFactors = F)
-
+#counts数据
 if(F){
   
   load(file = '../input.Rdata')
@@ -47,10 +47,10 @@ if(F){
   if(T){
     
     x=1:10;plot((x))
-    scale(x);plot(scale(x))
+    scale(x);plot(scale(x))#scale不改变数据的性质，只是使取值更加集中
     
-    n=t(scale(t(dat[cg,]))) #scale()函数去中心化和标准化
-    #对每个探针的表达量进行去中心化和标准化
+    n=t(scale(t(dat[cg,]))) #scale()函数针对列进行去中心化和标准化
+    #对每个探针的基因表达量进行去中心化和标准化
     n[n>2]=2 #矩阵n中归一化后，大于2的项，赋值使之等于2（相当于设置了一个上限）
     n[n< -2]= -2 #小于-2的项，赋值使之等于-2（相当于设置了一个下限）
     n[1:4,1:4]
@@ -104,7 +104,8 @@ if(F){
   dat[1:4,1:4]
   dat=t(dat)
   dat=as.data.frame(dat) ##转换为数据框
-  dat=cbind(dat,group_list ) ##cbind()合并列（横向追加）;添加分组信息
+  dat=cbind(dat,group_list ) 
+  ##cbind()合并列（横向追加）;添加分组信息这里的group_list是group_list=metadata$g
   dat[1:4,1:4]
   ## 表达矩阵可以随心所欲的取行列，基础知识需要打牢。
   dat[1:4,12197:12199]
@@ -131,6 +132,7 @@ if(F){
   
 }
 
+#rpkm数据
 rm(list = ls())  ## 魔幻操作，一键清空~
 options(stringsAsFactors = F)
 if(F){
@@ -159,7 +161,7 @@ if(F){
   #names()函数，获取或设置对象的名称
   library(pheatmap)
   
-  mat=log2(dat[cg,]+0.01)
+  mat=log2(dat[cg,]+0.01)#rpkm数据不log一下画出来的热图会被最大值覆盖
   ##画热图,针对top100的sd的基因集的表达矩阵,没有聚类分组
   pheatmap(mat,show_colnames =F,show_rownames = F,
            filename = 'all_cells_top_100_sd.png')
