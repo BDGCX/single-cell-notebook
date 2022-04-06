@@ -28,7 +28,7 @@ table(plate)
 
 ## 如果想了解PCA分析原理，需要阅读：https://mp.weixin.qq.com/s/Kw05PWD2m65TZu2Blhnl4w
 ##首先我们使用简单的 prcomp 函数来了解 PCA分析
-#以下直接跳过到131行
+#以下直接跳过到148行
 if(F){
   set.seed(123456789)
   #set.seed()产生随机数
@@ -128,7 +128,6 @@ if(F){
 ## 下面是画PCA的必须操作，需要看不同做PCA的包的说明书。
 dat_back=dat
 
-#以上是讲解过程直接跳过
 dat=dat_back
 dat=t(dat)
 dat=as.data.frame(dat)
