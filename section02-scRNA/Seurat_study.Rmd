@@ -1,0 +1,264 @@
+---
+title: "Seurat_study"
+author: "gx"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = F)
+knitr::opts_chunk$set(message  = F) 
+```
+
+##使用版本Seurat4.1.0
+## ## 首先清空环境变量，然后切换镜像以便下载安装包
+
+```{r}
+rm(list = ls())
+Sys.setenv(R_MAX_NUM_DLLS=999)
+options(stringsAsFactors = F)
+options()$repos  ## 查看使用install.packages安装时的默认镜像
+options()$BioC_mirror ##查看使用bioconductor的默认镜像
+options(BioC_mirror="https://mirrors.ustc.edu.cn/bioc/") ##指定镜像，这个是中国科技大学镜像
+options("repos" = c(CRAN="https://mirrors.tuna.tsinghua.edu.cn/CRAN/")) ##指定install.packages安装镜像，这个是清华镜像
+options()$repos 
+options()$BioC_mirror
+```
+
+## 下载并载入包
+
+```{r}
+BiocManager::install("Seurat",ask = F,update = F)
+library(Seurat)
+```
+
+##创建Seurat对象
+首先载入已经处理好的单细胞信息
+
+```{r}
+load(file='../input.Rdata')
+counts=a ##表达矩阵
+counts[1:4,1:4];dim(counts)
+class(counts)#查看counts的类型是数据框
+library(stringr) 
+meta=metadata ##细胞表型信息
+head(meta) ##查看载入数据
+gs=read.table('top18-genes-in-4-subgroup.txt')[,1]
+gs
+library(pheatmap)
+```
+
+##创建scater对象
+其中 min.cells 和 min.genes 两个参数是经验值
+
+```{r}
+sce <- CreateSeuratObject(counts = counts, 
+                          meta.data =meta,
+                          min.cells = 5, 
+                          min.genes = 2000, 
+                          project = "sce")
+sce
+?seurat
+table(apply(counts,2,function(x) sum(x>0) )>2000)
+table(apply(counts,1,function(x) sum(x>0) )>4)
+## 可以看到上面的过滤参数是如何发挥作用的
+head(sce@meta.data) 
+dim(sce@assays$RNA@data)
+```
+
+## 一些可视化
+
+```{r}
+VlnPlot(object = sce, 
+        features = c("nFeature_RNA", "nCount_RNA" ), 
+        group.by = 'plate',
+        ncol = 2)
+VlnPlot(object = sce, 
+        features = c("nFeature_RNA", "nCount_RNA"), 
+        group.by = 'g',
+        ncol = 2)
+### 同样的发现，普通的层次聚类得到的4组，很明显是检测到的基因数量的差异造成的。这不是一个好消息。
+```
+
+##为sce对象增加一个属性，供QC使用
+由于表达矩阵中没有线粒体基因，所以该处不添加添加线粒体基因信息，还可以添加其它属性，如核糖体基因，免疫相关基因，应激相关基因等，有待进一步探索。
+
+```{r}
+ercc.genes <- grep(pattern = "^ERCC-", x = rownames(x = sce), value = TRUE)
+percent.ercc <- Matrix::colSums(sce[ercc.genes, ]) / Matrix::colSums(sce)
+# AddMetaData adds columns to object@meta.data, and is a great place to stash QC stats
+sce <- AddMetaData(object = sce, metadata = percent.ercc,col.name = "percent.ercc")
+VlnPlot(object = sce, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.ercc" ), group.by = 'g', ncol = 3)
+#提取并计算线粒体基因比例
+dm[["percent.mt"]] <- PercentageFeatureSet(dm, pattern = "^mt-") #人为"^MT-"
+#提取计算核糖体基因比例，核糖体基因的命名规则通常人是RP，小鼠是Rp
+rb.genes <- rownames(dm)[grep("^Rp[sl]",rownames(dm))]#人使用"^RP[SL]"
+C<-GetAssayData(object = dm, slot = "counts")
+percent.ribo <- Matrix::colSums(C[rb.genes,])/Matrix::colSums(C)*100
+dm <- AddMetaData(dm, percent.ribo, col.name = "percent.ribo")
+```
+
+##可视化
+
+```{r }
+VlnPlot(sce,group.by = 'plate',c("Gapdh","Bmp3","Brca1","Brca2","nFeature_RNA"))
+
+FeatureScatter(object = sce,  feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+FeatureScatter(object = sce,  feature1 = "Brca1", feature2 = "Brca2")
+
+CellScatter(sce,sce@assays$RNA@counts@Dimnames[2][[1]][3], 
+         sce@assays$RNA@counts@Dimnames[2][[1]][4],
+        )
+```
+
+##标准化
+
+```{r}
+sce <- NormalizeData(object = sce, 
+                     normalization.method = "LogNormalize", 
+                     scale.factor = 10000)
+sce@assays$RNA@data[1:4,1:4]
+pheatmap(as.matrix(sce@assays$RNA@data[gs,]))
+```
+
+##发现高变基因
+
+```{r}
+sce <- FindVariableFeatures(object = sce, 
+                         mean.function = ExpMean, 
+                         dispersion.function = LogVMR )
+## 默认值是：x.low.cutoff = 0.1, x.high.cutoff = 8, y.cutoff = 1
+## 根据经验阈值挑选的变化基因个数。
+length( sce@assays$RNA@var.features)
+## 去除一些技术误差，比如"nFeature_RNA", "nCount_RNA"或者ERCC
+head(sce@meta.data) 
+sce <- ScaleData(object = sce, 
+                 vars.to.regress = c("nCount_RNA",'nFeature_RNA',"percent.ercc" ))
+# 后面就不需要考虑ERCC序列了。
+sce@assays$RNA@scale.data[1:4,1:4]
+pheatmap(as.matrix(sce@scale.data[gs,])) 
+```
+
+##PCA降维
+
+```{r}
+sce <- RunPCA(object = sce, pc.genes = sce@assays$RNA@var.features, 
+              do.print = TRUE, pcs.print = 1:5, 
+              genes.print = 5)
+tmp <- sce@reductions$pca@feature.loadings
+head(tmp)
+VizDimLoadings(sce, dims = 1:2, reduction = "pca")
+PCAPlot(sce, dims = 1:2,group.by = 'plate')
+PCAPlot(sce, dims = 1:2,group.by = 'g')
+#DimPlot(sce, reduction = "pca",group.by = "g")等价于上式
+sce <- ProjectPCA(sce, do.print = FALSE)
+DimHeatmap(sce, dims = 1, cells = 100, balanced = TRUE)
+DimHeatmap(sce, dims = 1:10, cells = 100, balanced = TRUE)
+PCHeatmap(object = sce, dims = 1, cells = 100, balanced = TRUE)
+#DimHeatmap()与PCHeatmap()两个用法一致
+```
+
+### 根据参数来调整最后的分组个数
+resolution越大，分组个数越多
+
+```{r}
+ElbowPlot(sce)
+sce <- FindNeighbors(sce, dims = 1:20)
+sce <- FindClusters(sce,resolution = 0.3)
+table(sce@meta.data$RNA_snn_res.0.3)
+#与之前的分组比较
+table(sce1@meta.data$RNA_snn_res.0.3,sce@meta.data$g) 
+## resolution 是最关键的参数
+```
+
+##t-SNE
+
+```{r}
+sce <- RunTSNE(object = sce, dims = 1:10, do.fast = TRUE)
+# note that you can set do.label=T to help label individual clusters
+#另一种方法
+#TSNEPlot(object = sce,label =T)
+#sce <- RunTSNE(sce, dims = 1:15)
+#head(sce@reductions$tsne@cell.embeddings)
+#DimPlot(sce, reduction = "tsne")
+```
+
+##UMAP
+```{r}
+dm <- RunUMAP(sce, dims = 1:15, label = T)
+head(sce@reductions$umap@cell.embeddings) # 提取UMAP坐标值。
+#note that you can set `label = TRUE` or use the LabelClusters function to help label individual clusters
+DimPlot(sce, reduction = "umap")
+```
+
+##挨个细胞集找marker基因 
+ident.1的值即为细胞分组名
+
+```{r}
+markers_df <- FindMarkers(object = sce, ident.1 = 2, 
+                          min.pct = 0.25)
+print(x = head(markers_df))
+markers_genes =  rownames(head(x = markers_df, n = 5))
+# 可视化最后找到的marker基因
+VlnPlot(object = sce, features =markers_genes, 
+        log = TRUE)
+# 首先可视化找到的marker基因
+FeaturePlot(object = sce, 
+            features =markers_genes, 
+            cols = c("grey", "blue"),
+            reduction = "tsne")
+```
+
+##可视化作者的marker基因
+
+```{r}
+# 然后可视化文献作者给出的基因
+gs <- read.csv(file = "top18-genes-in-4-subgroup.txt",sep = "\t",header = F)
+gs <- as.character(gs)
+FeaturePlot(object = sce, 
+            features =gs[1:18], 
+            cols = c("grey", "blue"), 
+            reduction = "tsne")
+FeaturePlot(object = sce, 
+            features =gs[19:36], 
+            cols = c("grey", "blue"), 
+            reduction = "tsne")
+FeaturePlot(object = sce, 
+            features =gs[37:54], 
+            cols = c("grey", "blue"), 
+            reduction = "tsne")
+FeaturePlot(object = sce, 
+            features =gs[55:72], 
+            cols = c("grey", "blue"), 
+            reduction = "tsne")
+```
+
+## 对每个类别细胞都找到自己的marker基因
+
+```{r}
+sce.markers <- FindAllMarkers(object = sce, only.pos = TRUE, 
+                              min.pct = 0.25, 
+                              thresh = 0.25)
+library(dplyr)
+sce.markers %>% group_by(cluster) %>% top_n(2, avg_logFC)
+top10 <- sce.markers %>% group_by(cluster) %>% top_n(10, avg_log2FC)
+intersect(top10$gene,gs$V1)
+# setting slim.col.label to TRUE will print just the cluster IDS instead of# every cell name
+DoHeatmap(object = sce, genes = top10$gene, slim.col.label = TRUE, remove.key = TRUE)
+# save(sce.markers,sce,file='sce_seurat.Rdata')
+# load(file='sce_seurat.Rdata') 
+FeaturePlot(object = sce, 
+            features =top10$gene, 
+            cols = c("grey", "blue"), 
+            reduction = "tsne")
+
+top20 <- sce.markers %>% group_by(cluster) %>% top_n(20, avg_log2FC)
+intersect(top20$gene,gs$V1)##查看自己做的和作者做的marker基因交集
+DoHeatmap(object = sce, genes = top20$gene, 
+          slim.col.label = TRUE, remove.key = TRUE)
+```
+
